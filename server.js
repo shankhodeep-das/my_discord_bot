@@ -54,6 +54,10 @@ const BOTS = {
   // Add more bots here later — zero backend changes required
 };
 
+console.log("Bot token loaded:", process.env.DISCORD_BOT_TOKEN ? "YES ✅" : "NO ❌");
+console.log("Bot ID loaded:", process.env.ALPHA_SCRIM_BOT_ID ? "YES ✅" : "NO ❌");
+
+
 // ─── MIDDLEWARE ───────────────────────────────────────────────────────────────
 app.use(cors({
   origin:      process.env.FRONTEND_URL,
@@ -131,8 +135,14 @@ app.get("/bots/:botId/info", async (req, res) => {
       tag:      botData.discriminator,
     });
   } catch (err) {
-    res.status(500).json({ error: "Failed to fetch bot info" });
-  }
+  console.error("Bot info error full:", err.response?.data || err.message);
+  console.error("Bot info status:", err.response?.status);
+  res.status(500).json({ 
+    error: "Failed to fetch bot info",
+    details: err.response?.data || err.message,
+    status: err.response?.status
+  });
+}
 });
 
 // ActivityLog — logs every notable action
