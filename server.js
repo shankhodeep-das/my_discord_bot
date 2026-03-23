@@ -246,15 +246,17 @@ async function checkBotInGuild(botToken, guildId) {
 // ─── BOT INFO SMART CACHE ─────────────────────────────────────────────────────
 const botInfoCache = {};
 
-async function loadBotInfo(botId = null) {
+async function loadBotInfo(botId = null, attempt = 1) {
   const botsToLoad = botId ? { [botId]: BOTS[botId] } : BOTS;
+  const MAX_ATTEMPTS = 5;
+
   for (const [id, bot] of Object.entries(botsToLoad)) {
     if (!bot || !bot.token) {
       log("error", `No token for bot: ${id}`);
       continue;
     }
     try {
-      log("step", `Loading bot info for: ${id}`);
+      log("step", `Loading bot info for: ${id} (attempt ${attempt}/${MAX_ATTEMPTS})`);
       const response = await axios.get(`${DISCORD_API}/users/@me`, {
         headers: { Authorization: `Bot ${bot.token}` },
       });
@@ -269,16 +271,32 @@ async function loadBotInfo(botId = null) {
       };
       log("success", `Bot info loaded: ${botData.username}`);
     } catch (err) {
+      const status = err.response?.status;
       log("error", `Failed to load bot info for ${id}`, {
-        status: err.response?.status,
-        error:  err.response?.data?.message || err.message,
+        status,
+        error: err.response?.data?.message || err.message,
       });
+
+      // Handle 429 rate limit — retry with exponential backoff
+      if (status === 429 && attempt < MAX_ATTEMPTS) {
+        const retryAfter = err.response?.headers?.["retry-after"];
+        // Use Discord's retry-after header (in seconds), else exponential backoff
+        const waitMs = retryAfter
+          ? parseFloat(retryAfter) * 1000
+          : Math.min(1000 * Math.pow(2, attempt), 60000); // 2s, 4s, 8s, 16s, max 60s
+        log("warning", `Rate limited by Discord. Retrying in ${Math.round(waitMs/1000)}s...`);
+        setTimeout(() => loadBotInfo(botId, attempt + 1), waitMs);
+        return;
+      }
+
       if (botInfoCache[id]) log("warning", `Using cached data for ${id}`);
     }
   }
 }
 
-loadBotInfo();
+// Delay initial load by 3 seconds to avoid rate limits on fresh deploys
+setTimeout(() => loadBotInfo(), 3000);
+
 setInterval(() => {
   log("info", "Auto-refreshing bot info cache (24h interval)");
   loadBotInfo();
@@ -754,8 +772,8 @@ app.get("/auth/callback", async (req, res) => {
     log("step", "Step 7: Setting HTTP-only cookie...");
     res.cookie("token", token, {
       httpOnly: true,
-      secure:   process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      secure:   true,
+      sameSite: "none",
       maxAge:   COOKIE_MAX_AGE,
     });
     log("success", "Step 7: Cookie set successfully");
