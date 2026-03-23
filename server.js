@@ -448,15 +448,14 @@ app.get("/", (req, res) => {
         "FRONTEND_URL",
         "ALPHA_SCRIM_BOT_ID",
         "REFRESH_SECRET",
-      ].map(k => `
-        <div class="env-row">
-          <span class="env-key" title="${k}">${k.replace("DISCORD_","D_").replace("MONGODB_","MDB_").replace("ALPHA_SCRIM_","AS_")}</span>
-          ${process.env[k]
-            ? `<span class="env-val-set">✓</span>`
-            : `<span class="env-val-miss">✗</span>`
-          }
-        </div>
-      `).join("")}
+      ].map(k =>
+        '<div class="env-row">' +
+        '<span class="env-key" title="' + k + '">' + k.replace("DISCORD_","D_").replace("MONGODB_","MDB_").replace("ALPHA_SCRIM_","AS_") + '</span>' +
+        (process.env[k]
+          ? '<span class="env-val-set">✓</span>'
+          : '<span class="env-val-miss">✗</span>') +
+        '</div>'
+      ).join("")}
     </div>
     <div class="sidebar-section">
       <div class="conn-item">
@@ -562,17 +561,17 @@ app.get("/", (req, res) => {
       return;
     }
 
-    container.innerHTML = filtered.map(entry => `
-      <div class="log-entry ${entry.type}">
-        <span class="log-icon">${icons[entry.type]||"•"}</span>
-        <div class="log-body">
-          <div class="log-msg">${entry.message}</div>
-          ${entry.extra ? `<div class="log-extra">${JSON.stringify(entry.extra)}</div>` : ""}
-        </div>
-        <span class="log-type-badge badge-${entry.type}">${entry.type}</span>
-        <span class="log-time">${entry.time}</span>
-      </div>
-    `).join("");
+    container.innerHTML = filtered.map(entry =>
+      '<div class="log-entry ' + entry.type + '">' +
+        '<span class="log-icon">' + (icons[entry.type]||"•") + '</span>' +
+        '<div class="log-body">' +
+          '<div class="log-msg">' + entry.message + '</div>' +
+          (entry.extra ? '<div class="log-extra">' + JSON.stringify(entry.extra) + '</div>' : "") +
+        '</div>' +
+        '<span class="log-type-badge badge-' + entry.type + '">' + entry.type + '</span>' +
+        '<span class="log-time">' + entry.time + '</span>' +
+      '</div>'
+    ).join("");
   }
 
   function addEntry(entry) {
@@ -998,6 +997,7 @@ app.use((err, req, res, next) => {
 
 // ─── START ────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
-  console.log("✅  Alphabotics API is running on port " + PORT);
-  console.log("✅  Mode: " + (process.env.NODE_ENV || "development"));
+  log("success", `Alphabotics API running on port ${PORT} in ${process.env.NODE_ENV||"development"} mode`);
+  log("info", `Monitor dashboard: http://localhost:${PORT}`);
+  log("info", `Registered bots: ${Object.keys(BOTS).join(", ")}`);
 });
