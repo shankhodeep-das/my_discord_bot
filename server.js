@@ -246,17 +246,35 @@ async function checkBotInGuild(botToken, guildId) {
 // ─── BOT INFO SMART CACHE ─────────────────────────────────────────────────────
 const botInfoCache = {};
 
-async function loadBotInfo(botId = null, attempt = 1) {
+// Load bot info directly from BOTS registry — no Discord API call.
+// This avoids rate limiting entirely on startup.
+function loadBotInfo(botId = null) {
   const botsToLoad = botId ? { [botId]: BOTS[botId] } : BOTS;
-  const MAX_ATTEMPTS = 5;
-
   for (const [id, bot] of Object.entries(botsToLoad)) {
-    if (!bot || !bot.token) {
-      log("error", `No token for bot: ${id}`);
+    if (!bot || !bot.id) {
+      log("error", `No ID configured for bot: ${id}`);
       continue;
     }
+    botInfoCache[id] = {
+      id:       bot.id,
+      name:     bot.name,
+      avatar:   null,
+      cachedAt: Date.now(),
+    };
+    log("success", `Bot info loaded from registry: ${bot.name}`);
+  }
+}
+
+// Load immediately — no API call, no rate limit risk
+loadBotInfo();
+
+// Try to fetch real avatar from Discord once, 60s after startup
+// so repeated deploys don't keep hammering the API
+setTimeout(async () => {
+  for (const [id, bot] of Object.entries(BOTS)) {
+    if (!bot || !bot.token) continue;
     try {
-      log("step", `Loading bot info for: ${id} (attempt ${attempt}/${MAX_ATTEMPTS})`);
+      log("step", `Fetching live bot avatar for: ${id}`);
       const response = await axios.get(`${DISCORD_API}/users/@me`, {
         headers: { Authorization: `Bot ${bot.token}` },
       });
@@ -269,36 +287,20 @@ async function loadBotInfo(botId = null, attempt = 1) {
           : null,
         cachedAt: Date.now(),
       };
-      log("success", `Bot info loaded: ${botData.username}`);
+      log("success", `Live bot info updated: ${botData.username}`);
     } catch (err) {
       const status = err.response?.status;
-      log("error", `Failed to load bot info for ${id}`, {
-        status,
-        error: err.response?.data?.message || err.message,
-      });
-
-      // Handle 429 rate limit — retry with exponential backoff
-      if (status === 429 && attempt < MAX_ATTEMPTS) {
-        const retryAfter = err.response?.headers?.["retry-after"];
-        // Use Discord's retry-after header (in seconds), else exponential backoff
-        const waitMs = retryAfter
-          ? parseFloat(retryAfter) * 1000
-          : Math.min(1000 * Math.pow(2, attempt), 60000); // 2s, 4s, 8s, 16s, max 60s
-        log("warning", `Rate limited by Discord. Retrying in ${Math.round(waitMs/1000)}s...`);
-        setTimeout(() => loadBotInfo(botId, attempt + 1), waitMs);
-        return;
+      if (status === 429) {
+        log("warning", `Discord still rate limiting — registry fallback active for ${id}. Will auto-resolve in a few hours.`);
+      } else {
+        log("error", `Could not fetch live bot info for ${id}`, { status, error: err.message });
       }
-
-      if (botInfoCache[id]) log("warning", `Using cached data for ${id}`);
     }
   }
-}
-
-// Delay initial load by 3 seconds to avoid rate limits on fresh deploys
-setTimeout(() => loadBotInfo(), 3000);
+}, 60 * 1000);
 
 setInterval(() => {
-  log("info", "Auto-refreshing bot info cache (24h interval)");
+  log("info", "Auto-refreshing bot info (24h interval)");
   loadBotInfo();
 }, 24 * 60 * 60 * 1000);
 
@@ -794,6 +796,11 @@ app.get("/auth/callback", async (req, res) => {
       error:   errData?.error || err.message,
       details: errData?.error_description || errData?.message || null,
     });
+    // 429 = Discord rate limiting the token exchange — show specific error to user
+    if (status === 429) {
+      log("warning", "Discord is rate limiting OAuth token exchange. User should wait a few minutes and try again.");
+      return res.redirect(`${process.env.FRONTEND_URL}?error=rate_limited`);
+    }
     res.redirect(`${process.env.FRONTEND_URL}?error=oauth_failed`);
   }
 });
