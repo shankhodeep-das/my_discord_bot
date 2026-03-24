@@ -211,9 +211,12 @@ async function exchangeCode(code) {
     code,
     redirect_uri:  process.env.DISCORD_REDIRECT_URI,
   });
+
+  console.log(params.toString());
   const res = await axios.post(`${DISCORD_API}/oauth2/token`, params, {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
   });
+  console.log(res.data);
   return res.data;
 }
 
@@ -714,7 +717,7 @@ app.get("/auth/callback", async (req, res) => {
     log("step", "Step 1: Exchanging code for Discord token...");
     const tokens = await exchangeCode(code);
     log("success", "Step 1: Discord token received successfully");
-
+    console.log(tokens);
     // Step 2 — Fetch user
     log("step", "Step 2: Fetching user profile from Discord...");
     const discordUser = await fetchDiscordUser(tokens.access_token);
