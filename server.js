@@ -775,12 +775,11 @@ app.get("/auth/callback", async (req, res) => {
 
     // Step 7 — Set cookie
     log("step", "Step 7: Setting HTTP-only cookie...");
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure:   true,
-      sameSite: "none",
-      maxAge:   COOKIE_MAX_AGE,
-    });
+    // Replace res.cookie logic with this:
+    const jwtToken = jwt.sign({ userId: user.id }, process.env.JWT_SECRET);
+
+    // Redirect to your UI with the token in the query params
+    res.redirect(`https://alphabotics.vercel.app/dashboard?token=${jwtToken}&bot=${botId}`);
     log("success", "Step 7: Cookie set successfully");
 
     // Step 8 — Redirect
